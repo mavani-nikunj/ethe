@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
+*.pem
+.env
+.env.local
+.env.*.local
+
+# Logs (runtime error logs, not the src/logs module)
+/logs/
+/apps/api/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Uploads and local data
+
+db-backup/
+
+# Temporary files
+tmp/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Coverage and test output
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# Python
+__pycache__/
+*.pyc
+
+# Project folders
+Documents/
+project_document/
+Old project/
+docs/
+
+# Claude Code (local settings, session traces)
+.claude/
+CLAUDE.local.md
+
+# Upload
+uploads/
+/app/api/uploads/

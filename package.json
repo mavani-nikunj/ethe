@@ -1,0 +1,25 @@
+{
+  "name": "ethesis",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Multi-tenant thesis evaluation and approval platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w @ethesis/shared",
+    "build": "npm run build:shared && npm run build -w @ethesis/api && npm run build -w @ethesis/web",
+    "dev:api": "npm run start:dev -w @ethesis/api",
+    "dev:web": "npm run dev -w @ethesis/web",
+    "seed": "npm run seed -w @ethesis/api",
+    "reset:aiims": "npm run reset:aiims -w @ethesis/api",
+    "seed:blueprints": "npm run seed:blueprints -w @ethesis/api"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}

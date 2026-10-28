@@ -1,0 +1,91 @@
+name: Deploy eThesis
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          SMTP2GO_API_KEY: ${{ secrets.SMTP2GO_API_KEY }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: SMTP2GO_API_KEY
+          # Large legacy upload batches can take longer than the 10m default to fetch.
+          command_timeout: 30m
+
+          script: |
+            set -e
+
+            cd /home/ubuntu/eThesis
+
+            echo "=== Freeing disk space ==="
+            # Partial packs left by fetches that were cut off.
+            rm -f .git/objects/pack/tmp_pack_* .git/objects/pack/tmp_idx_*
+            # Legacy PDFs that are no longer tracked (not referenced in the database), incl. half-written files
+            # from failed checkouts. The app never writes to this folder, so only git-managed files belong here.
+            git clean -fdx -- apps/api/uploads/legacy/pdf
+            df -h . | tail -1
+
+            echo "=== Fetching latest code ==="
+            git fetch origin main
+
+            echo "=== Updating working tree ==="
+            git checkout main
+            git reset --hard origin/main
+
+            echo "=== Installing dependencies ==="
+            npm install
+
+            echo "=== Building shared package ==="
+            npm run build:shared
+
+            echo "=== Cleaning old backend build ==="
+            rm -rf apps/api/dist
+            rm -f apps/api/tsconfig.tsbuildinfo
+
+            echo "=== Building backend ==="
+            npm run build -w @ethesis/api
+
+            echo "=== Verifying backend build ==="
+            test -f apps/api/dist/main.js
+            test -f apps/api/dist/files/reminder-filters.js
+
+            echo "=== Building frontend ==="
+            npm run build -w @ethesis/web
+
+            echo "=== Mail settings (SMTP2GO only, no Gmail) ==="
+            # The API reads ./.env before apps/api/.env, so both get the same mail settings.
+            if [ -n "$SMTP2GO_API_KEY" ]; then
+              set_env() {
+                touch "$1"
+                if grep -q "^$2=" "$1"; then sed -i "s|^$2=.*|$2=$3|" "$1"; else echo "$2=$3" >> "$1"; fi
+              }
+              for f in .env apps/api/.env; do
+                sed -i -E '/^SMTP_(HOST|PORT|USER|PASS)=/d; /^MAIL_DISABLED=/d' "$f" 2>/dev/null || true
+                set_env "$f" SMTP2GO_API_KEY "$SMTP2GO_API_KEY"
+                set_env "$f" SMTP2GO_API_URL "https://api.smtp2go.com/v3/email/send"
+                set_env "$f" MAIL_FROM "noreply@rrp.aiimsexams.ac.in"
+                set_env "$f" MAIL_FROM_NAME "AIIMS EXAMS"
+                set_env "$f" MAIL_CC "dmmchprofessionalaiims@gmail.com"
+              done
+              grep -h -E "^(SMTP|MAIL)" .env apps/api/.env | sed -E 's/^(SMTP2GO_API_KEY=).*/\1***/'
+            else
+              echo "SMTP2GO_API_KEY secret not set; mail settings left unchanged"
+            fi
+
+            echo "=== Restarting backend ==="
+            /home/ubuntu/.nvm/versions/node/v20.0.0/bin/pm2 reload ET4000 --update-env
+
+            echo "=== Checking backend status ==="
+            /home/ubuntu/.nvm/versions/node/v20.0.0/bin/pm2 status ET4000
+
+            echo "=== Deployment completed successfully ==="
